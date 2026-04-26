@@ -1,0 +1,267 @@
+@page "/students/import"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject StudentService StudentService
+@inject ClassService ClassService
+@inject ExcelService ExcelService
+@inject IToastService Toast
+@inject NavigationManager Nav
+
+<PageTitle>Import Students - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-upload me-2 text-primary"></i>Import Students</h4>
+    <a href="/students" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Students
+    </a>
+</div>
+
+@if (step == 1)
+{
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-7">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom fw-bold py-3">
+                    <i class="bi bi-1-circle-fill text-primary me-2"></i>Step 1: Configure Import
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Class <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="selectedClassId" @bind:after="OnClassChanged">
+                            <option value="0">-- Select Class --</option>
+                            @foreach (var c in classes)
+                            {
+                                <option value="@c.Id">@c.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Section</label>
+                        <select class="form-select" @bind="selectedSectionId">
+                            <option value="0">-- No Section --</option>
+                            @foreach (var s in sections)
+                            {
+                                <option value="@s.Id">@s.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Academic Year <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="academicYear" placeholder="e.g. 2024-25" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Admission Date</label>
+                        <input type="date" class="form-control" @bind="admissionDate" />
+                    </div>
+
+                    <hr />
+
+                    <div class="alert alert-info d-flex align-items-center gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill"></i>
+                        <div>Download the template, fill in student data, then upload the file below.</div>
+                    </div>
+
+                    <a href="/api/export/students/template" class="btn btn-outline-success btn-sm mb-3" target="_blank">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Download Template
+                    </a>
+
+                    <div class="mb-3">
+                        <label class="form-label">Upload Excel File <span class="text-danger">*</span></label>
+                        <InputFile class="form-control" accept=".xlsx,.xls" OnChange="HandleFileUpload" />
+                        @if (!string.IsNullOrEmpty(fileName))
+                        {
+                            <div class="form-text text-success"><i class="bi bi-check-circle me-1"></i>@fileName selected</div>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(uploadError))
+                    {
+                        <div class="alert alert-danger">@uploadError</div>
+                    }
+
+                    <div class="d-flex justify-content-end">
+                        <button class="btn btn-primary" @onclick="ParseFile" disabled="@(fileData == null || selectedClassId == 0 || string.IsNullOrEmpty(academicYear))">
+                            <i class="bi bi-eye me-1"></i>Preview
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else if (step == 2)
+{
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
+            <span class="fw-bold"><i class="bi bi-2-circle-fill text-primary me-2"></i>Step 2: Preview &amp; Import</span>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-muted small">
+                    <span class="text-success fw-bold">@validCount</span> valid&nbsp;&nbsp;
+                    <span class="text-danger fw-bold">@errorCount</span> errors
+                </span>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="() => step = 1">
+                    <i class="bi bi-arrow-left me-1"></i>Back
+                </button>
+                <button class="btn btn-primary btn-sm" @onclick="ImportStudents" disabled="@(validCount == 0 || importing)">
+                    @if (importing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    <i class="bi bi-upload me-1"></i>Import @validCount Students
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Father Name</th>
+                            <th>Father Phone</th>
+                            <th>DOB</th>
+                            <th>Gender</th>
+                            <th>Roll No</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in previewRows)
+                        {
+                            <tr class="@(row.IsValid ? "" : "table-danger")">
+                                <td class="text-muted small">@row.RowNumber</td>
+                                <td>@row.FullName</td>
+                                <td>@row.FatherName</td>
+                                <td>@row.FatherPhone</td>
+                                <td>@row.DateOfBirth?.ToString("dd/MM/yyyy")</td>
+                                <td>@row.Gender</td>
+                                <td>@row.RollNumber</td>
+                                <td>
+                                    @if (row.IsValid)
+                                    {
+                                        <span class="badge bg-success">OK</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger" title="@string.Join(", ", row.Errors)">
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>@string.Join(", ", row.Errors)
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private int step = 1;
+    private List<SchoolERP.Data.Models.Class> classes = new();
+    private List<SchoolERP.Data.Models.Section> sections = new();
+    private int selectedClassId;
+    private int selectedSectionId;
+    private string academicYear = string.Empty;
+    private DateTime admissionDate = DateTime.Today;
+
+    private byte[]? fileData;
+    private string fileName = string.Empty;
+    private string uploadError = string.Empty;
+
+    private List<StudentImportRow> previewRows = new();
+    private int validCount;
+    private int errorCount;
+    private bool importing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        classes = await ClassService.GetClassesAsync(AppState.CurrentSchoolId);
+        var year = DateTime.Today.Year;
+        academicYear = $"{year}-{(year + 1) % 100:D2}";
+    }
+
+    private async Task OnClassChanged()
+    {
+        selectedSectionId = 0;
+        if (selectedClassId > 0)
+            sections = await ClassService.GetSectionsAsync(selectedClassId);
+        else
+            sections = new();
+    }
+
+    private async Task HandleFileUpload(InputFileChangeEventArgs e)
+    {
+        uploadError = string.Empty;
+        var file = e.File;
+        if (file == null) return;
+
+        if (!file.Name.EndsWith(".xlsx") && !file.Name.EndsWith(".xls"))
+        {
+            uploadError = "Please upload an Excel file (.xlsx or .xls)";
+            return;
+        }
+
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            uploadError = "File size must be less than 5 MB";
+            return;
+        }
+
+        fileName = file.Name;
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
+        fileData = ms.ToArray();
+    }
+
+    private void ParseFile()
+    {
+        if (fileData == null) return;
+        using var ms = new MemoryStream(fileData);
+        previewRows = ExcelService.ParseStudentImport(ms);
+        validCount = previewRows.Count(r => r.IsValid);
+        errorCount = previewRows.Count(r => !r.IsValid);
+        step = 2;
+    }
+
+    private async Task ImportStudents()
+    {
+        importing = true;
+        int count = 0;
+        foreach (var row in previewRows.Where(r => r.IsValid))
+        {
+            var student = new SchoolERP.Data.Models.Student
+            {
+                SchoolId = AppState.CurrentSchoolId,
+                ClassId = selectedClassId,
+                SectionId = selectedSectionId == 0 ? null : selectedSectionId,
+                AcademicYear = academicYear,
+                AdmissionDate = admissionDate,
+                Status = "Active",
+                FullName = row.FullName,
+                FatherName = row.FatherName,
+                FatherPhone = row.FatherPhone,
+                MotherName = row.MotherName,
+                MotherPhone = row.MotherPhone,
+                DateOfBirth = row.DateOfBirth,
+                Gender = row.Gender,
+                BloodGroup = row.BloodGroup,
+                Address = row.Address,
+                City = row.City,
+                Pincode = row.Pincode,
+                RollNumber = row.RollNumber,
+                PreviousSchool = row.PreviousSchool,
+                TransportRequired = row.TransportRequired,
+                TransportRoute = row.TransportRoute,
+                TransportStop = row.TransportStop
+            };
+            await StudentService.CreateAsync(student);
+            count++;
+        }
+        importing = false;
+        Toast.ShowSuccess($"{count} students imported successfully!");
+        Nav.NavigateTo("/students");
+    }
+}

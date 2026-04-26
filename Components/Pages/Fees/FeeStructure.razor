@@ -1,0 +1,217 @@
+@page "/fees/structure"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject FeeService FeeService
+@inject ClassService ClassService
+@inject IToastService Toast
+
+<PageTitle>Fee Structure - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-list-columns-reverse me-2 text-primary"></i>Fee Structure</h4>
+</div>
+
+<div class="row g-3">
+    <!-- Fee Heads -->
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between py-3 border-bottom">
+                <span class="fw-bold">Fee Heads</span>
+                <button class="btn btn-primary btn-sm" @onclick="AddFeeHead">
+                    <i class="bi bi-plus"></i> Add
+                </button>
+            </div>
+            <div class="card-body p-0">
+                @foreach (var fh in feeHeads)
+                {
+                    <div class="d-flex align-items-center justify-content-between p-3 border-bottom @(editingFeeHead?.Id == fh.Id ? "bg-primary bg-opacity-10" : "")">
+                        <div>
+                            <div class="fw-medium">@fh.Name</div>
+                            <span class="badge bg-light text-muted small">@fh.Type</span>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => EditFeeHead(fh)">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteFeeHead(fh.Id)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (editingFeeHead != null)
+        {
+            <div class="card border-0 shadow-sm mt-3">
+                <div class="card-header bg-primary text-white py-2">
+                    @(editingFeeHead.Id == 0 ? "Add Fee Head" : "Edit Fee Head")
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Fee Name</label>
+                        <input class="form-control" @bind="editingFeeHead.Name" placeholder="e.g., Tuition Fee" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" @bind="editingFeeHead.Type">
+                            <option value="Monthly">Monthly</option>
+                            <option value="Quarterly">Quarterly</option>
+                            <option value="Yearly">Yearly</option>
+                            <option value="OneTime">One Time</option>
+                        </select>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary btn-sm" @onclick="SaveFeeHead">Save</button>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => editingFeeHead = null">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Fee Structure per Class -->
+    <div class="col-12 col-md-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3 border-bottom">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-5">
+                        <label class="form-label mb-1">Class</label>
+                        <select class="form-select" @bind="selectedClassId" @bind:after="LoadStructure">
+                            <option value="0">Select Class</option>
+                            @foreach (var c in classes)
+                            {
+                                <option value="@c.Id">@c.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label mb-1">Academic Year</label>
+                        <input class="form-control" @bind="academicYear" @bind:after="LoadStructure" placeholder="2024-25" />
+                    </div>
+                    @if (selectedClassId > 0)
+                    {
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button class="btn btn-success w-100" @onclick="SaveAllStructures">
+                                <i class="bi bi-check-lg me-1"></i>Save
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @if (selectedClassId > 0)
+            {
+                <div class="card-body p-0">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Fee Head</th>
+                                <th>Type</th>
+                                <th style="width:180px">Amount (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var fh in feeHeads)
+                            {
+                                var amt = GetAmount(fh.Id);
+                                <tr>
+                                    <td class="fw-medium">@fh.Name</td>
+                                    <td><span class="badge bg-light text-muted">@fh.Type</span></td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm text-end"
+                                               value="@amt"
+                                               @onchange="e => SetAmount(fh.Id, decimal.TryParse(e.Value?.ToString(), out var v) ? v : 0)"
+                                               min="0" step="50" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light">
+                                <td colspan="2" class="fw-bold">Total</td>
+                                <td class="fw-bold text-end pe-3">₹@structureAmounts.Values.Sum().ToString("N0")</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-arrow-left-circle fs-2 d-block mb-2"></i>
+                    Select a class to set fee structure
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<FeeHead> feeHeads = new();
+    private List<Class> classes = new();
+    private int selectedClassId;
+    private string academicYear = $"{DateTime.Today.Year}-{(DateTime.Today.Year + 1) % 100:D2}";
+    private Dictionary<int, decimal> structureAmounts = new();
+    private FeeHead? editingFeeHead;
+
+    protected override async Task OnInitializedAsync()
+    {
+        feeHeads = await FeeService.GetFeeHeadsAsync(AppState.CurrentSchoolId);
+        classes = await ClassService.GetClassesAsync(AppState.CurrentSchoolId);
+    }
+
+    private async Task LoadStructure()
+    {
+        if (selectedClassId == 0) return;
+        var structures = await FeeService.GetFeeStructureAsync(selectedClassId, academicYear);
+        structureAmounts = structures.ToDictionary(s => s.FeeHeadId, s => s.Amount);
+    }
+
+    private decimal GetAmount(int feeHeadId) =>
+        structureAmounts.TryGetValue(feeHeadId, out var v) ? v : 0;
+
+    private void SetAmount(int feeHeadId, decimal value)
+    {
+        structureAmounts[feeHeadId] = value;
+    }
+
+    private async Task SaveAllStructures()
+    {
+        foreach (var kv in structureAmounts)
+        {
+            await FeeService.SaveFeeStructureAsync(new FeeStructure
+            {
+                ClassId = selectedClassId,
+                FeeHeadId = kv.Key,
+                Amount = kv.Value,
+                AcademicYear = academicYear
+            });
+        }
+        Toast.ShowSuccess("Fee structure saved!");
+    }
+
+    private void AddFeeHead() => editingFeeHead = new FeeHead { SchoolId = AppState.CurrentSchoolId };
+    private void EditFeeHead(FeeHead fh) => editingFeeHead = new FeeHead
+    {
+        Id = fh.Id, SchoolId = fh.SchoolId, Name = fh.Name, Type = fh.Type, IsActive = fh.IsActive
+    };
+
+    private async Task SaveFeeHead()
+    {
+        if (editingFeeHead == null || string.IsNullOrEmpty(editingFeeHead.Name)) return;
+        editingFeeHead.SchoolId = AppState.CurrentSchoolId;
+        await FeeService.SaveFeeHeadAsync(editingFeeHead);
+        feeHeads = await FeeService.GetFeeHeadsAsync(AppState.CurrentSchoolId);
+        editingFeeHead = null;
+        Toast.ShowSuccess("Fee head saved!");
+    }
+
+    private async Task DeleteFeeHead(int id)
+    {
+        await FeeService.DeleteFeeHeadAsync(id);
+        feeHeads = await FeeService.GetFeeHeadsAsync(AppState.CurrentSchoolId);
+        Toast.ShowInfo("Fee head deleted.");
+    }
+}

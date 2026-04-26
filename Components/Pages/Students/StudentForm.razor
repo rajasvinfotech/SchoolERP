@@ -1,0 +1,347 @@
+@page "/students/add"
+@page "/students/{StudentId:int}/edit"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject StudentService StudentService
+@inject ClassService ClassService
+@inject SchoolService SchoolService
+@inject NavigationManager Nav
+@inject IToastService Toast
+
+<PageTitle>@(StudentId == null ? "Add Student" : "Edit Student") - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="fw-bold mb-0">
+            <i class="bi bi-person-@(StudentId == null ? "plus" : "pencil")-fill me-2 text-primary"></i>
+            @(StudentId == null ? "Add New Student" : "Edit Student")
+        </h4>
+    </div>
+    <a href="/students" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+}
+else
+{
+    <EditForm Model="student" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <div class="row g-3">
+            <!-- Basic Info -->
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-primary text-white py-2">
+                        <i class="bi bi-person-fill me-2"></i>Basic Information
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Admission Number</label>
+                                <input class="form-control" @bind="student.AdmissionNumber"
+                                       placeholder="Auto-generate if empty" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Full Name *</label>
+                                <InputText @bind-Value="student.FullName" class="form-control" placeholder="Student's full name" />
+                                <ValidationMessage For="() => student.FullName" class="text-danger small" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Date of Birth</label>
+                                <InputDate @bind-Value="student.DateOfBirth" class="form-control" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Gender</label>
+                                <InputSelect @bind-Value="student.Gender" class="form-select">
+                                    <option value="">Select</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-1">
+                                <label class="form-label">Blood Grp</label>
+                                <InputSelect @bind-Value="student.BloodGroup" class="form-select">
+                                    <option value="">-</option>
+                                    @foreach (var bg in new[] { "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-" })
+                                    {
+                                        <option value="@bg">@bg</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Aadhar Number</label>
+                                <InputText @bind-Value="student.AadharNumber" class="form-control" placeholder="XXXX XXXX XXXX" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Academic Info -->
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-info text-white py-2">
+                        <i class="bi bi-mortarboard me-2"></i>Academic Information
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Class *</label>
+                                <select class="form-select" @bind="student.ClassId" @bind:after="OnClassChange">
+                                    <option value="">Select Class</option>
+                                    @foreach (var c in classes)
+                                    {
+                                        <option value="@c.Id">@c.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Section</label>
+                                <select class="form-select" @bind="student.SectionId">
+                                    <option value="">Select</option>
+                                    @foreach (var s in sections)
+                                    {
+                                        <option value="@s.Id">@s.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Roll Number</label>
+                                <InputText @bind-Value="student.RollNumber" class="form-control" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Admission Date *</label>
+                                <InputDate @bind-Value="student.AdmissionDate" class="form-control" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Academic Year</label>
+                                <InputText @bind-Value="student.AcademicYear" class="form-control" placeholder="2024-25" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Previous School</label>
+                                <InputText @bind-Value="student.PreviousSchool" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parent Info -->
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-success text-white py-2">
+                        <i class="bi bi-people-fill me-2"></i>Parent / Guardian Information
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Father Name *</label>
+                                <InputText @bind-Value="student.FatherName" class="form-control" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Father Phone (WhatsApp) *</label>
+                                <InputText @bind-Value="student.FatherPhone" class="form-control" placeholder="10 digit" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Father Occupation</label>
+                                <InputText @bind-Value="student.FatherOccupation" class="form-control" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Mother Name</label>
+                                <InputText @bind-Value="student.MotherName" class="form-control" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Mother Phone</label>
+                                <InputText @bind-Value="student.MotherPhone" class="form-control" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Guardian Name</label>
+                                <InputText @bind-Value="student.GuardianName" class="form-control" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Guardian Phone</label>
+                                <InputText @bind-Value="student.GuardianPhone" class="form-control" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Relation</label>
+                                <InputText @bind-Value="student.GuardianRelation" class="form-control" placeholder="Uncle, Grandfather..." />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Address + Transport + Status -->
+            <div class="col-12 col-md-8">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-warning text-dark py-2">
+                        <i class="bi bi-geo-alt-fill me-2"></i>Address & Transport
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Full Address</label>
+                                <InputTextArea @bind-Value="student.Address" class="form-control" rows="2" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">City</label>
+                                <InputText @bind-Value="student.City" class="form-control" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Pincode</label>
+                                <InputText @bind-Value="student.Pincode" class="form-control" />
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check form-switch mb-2">
+                                    <InputCheckbox @bind-Value="student.TransportRequired" class="form-check-input" id="transportCheck" />
+                                    <label class="form-check-label" for="transportCheck">Transport Required</label>
+                                </div>
+                                @if (student.TransportRequired)
+                                {
+                                    <div class="row g-2 mt-1">
+                                        <div class="col-md-4">
+                                            <label class="form-label">Route / Area</label>
+                                            <InputText @bind-Value="student.TransportRoute" class="form-control" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Stop Name</label>
+                                            <InputText @bind-Value="student.TransportStop" class="form-control" />
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-secondary text-white py-2">
+                        <i class="bi bi-toggle-on me-2"></i>Status
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Student Status</label>
+                            <InputSelect @bind-Value="student.Status" class="form-select">
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                                <option value="TransferOut">Transfer Out</option>
+                                <option value="PassedOut">Passed Out</option>
+                            </InputSelect>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <InputCheckbox @bind-Value="student.TcIssued" class="form-check-input" id="tcCheck" />
+                            <label class="form-check-label" for="tcCheck">TC Issued</label>
+                        </div>
+                        @if (student.TcIssued)
+                        {
+                            <div>
+                                <label class="form-label">TC Issue Date</label>
+                                <InputDate @bind-Value="student.TcIssuedDate" class="form-control" />
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMsg))
+        {
+            <div class="alert alert-danger mt-3">@errorMsg</div>
+        }
+
+        <div class="d-flex justify-content-end gap-2 mt-4">
+            <a href="/students" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary px-4" disabled="@isSaving">
+                @if (isSaving) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                <i class="bi bi-check-lg me-1"></i>
+                @(StudentId == null ? "Add Student" : "Update Student")
+            </button>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int? StudentId { get; set; }
+
+    private Student student = new() { AdmissionDate = DateTime.Today, Status = "Active" };
+    private List<Class> classes = new();
+    private List<Section> sections = new();
+    private bool isLoading = true;
+    private bool isSaving;
+    private string errorMsg = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        classes = await ClassService.GetClassesAsync(AppState.CurrentSchoolId);
+
+        if (StudentId.HasValue)
+        {
+            var existing = await StudentService.GetByIdAsync(StudentId.Value);
+            if (existing != null)
+            {
+                student = existing;
+                if (student.ClassId.HasValue)
+                    sections = await ClassService.GetSectionsAsync(student.ClassId.Value);
+            }
+        }
+        else
+        {
+            student.SchoolId = AppState.CurrentSchoolId;
+            student.AcademicYear = $"{DateTime.Today.Year}-{(DateTime.Today.Year + 1) % 100:D2}";
+        }
+
+        isLoading = false;
+    }
+
+    private async Task OnClassChange()
+    {
+        sections = student.ClassId.HasValue
+            ? await ClassService.GetSectionsAsync(student.ClassId.Value)
+            : new();
+        student.SectionId = null;
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSaving = true;
+        errorMsg = string.Empty;
+
+        try
+        {
+            student.SchoolId = AppState.CurrentSchoolId;
+
+            if (!string.IsNullOrEmpty(student.AdmissionNumber))
+            {
+                var exists = await StudentService.AdmissionNumberExistsAsync(
+                    student.SchoolId, student.AdmissionNumber, StudentId);
+                if (exists)
+                {
+                    errorMsg = "Admission number already exists!";
+                    isSaving = false;
+                    return;
+                }
+            }
+
+            if (StudentId == null)
+                await StudentService.CreateAsync(student);
+            else
+                await StudentService.UpdateAsync(student);
+
+            Toast.ShowSuccess(StudentId == null ? "Student added successfully!" : "Student updated!");
+            Nav.NavigateTo("/students");
+        }
+        catch (Exception ex)
+        {
+            errorMsg = $"Error: {ex.Message}";
+        }
+
+        isSaving = false;
+    }
+}

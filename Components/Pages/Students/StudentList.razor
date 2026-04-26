@@ -1,0 +1,297 @@
+@page "/students"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject StudentService StudentService
+@inject ClassService ClassService
+@inject NavigationManager Nav
+@inject IToastService Toast
+@inject IJSRuntime JS
+
+<PageTitle>Students - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-people-fill me-2 text-primary"></i>Students</h4>
+        <small class="text-muted">@totalCount total students</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/api/export/students/@AppState.CurrentSchoolId" class="btn btn-success btn-sm">
+            <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+        </a>
+        @if (AppState.CanManageStudents)
+        {
+            <a href="/students/add" class="btn btn-primary btn-sm">
+                <i class="bi bi-person-plus-fill me-1"></i>Add Student
+            </a>
+        }
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-3">
+        <div class="row g-2">
+            <div class="col-12 col-md-4">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" placeholder="Search name, adm no, phone..."
+                           @bind="searchTerm" @bind:event="oninput" @oninput="OnSearchInput" />
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <select class="form-select" @bind="filterClassId" @bind:after="LoadStudents">
+                    <option value="0">All Classes</option>
+                    @foreach (var c in classes)
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <select class="form-select" @bind="filterSectionId" @bind:after="LoadStudents">
+                    <option value="0">All Sections</option>
+                    @foreach (var s in sections)
+                    {
+                        <option value="@s.Id">@s.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <select class="form-select" @bind="filterStatus" @bind:after="LoadStudents">
+                    <option value="">All Status</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="TransferOut">Transfer Out</option>
+                    <option value="PassedOut">Passed Out</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <button class="btn btn-outline-secondary w-100" @onclick="ClearFilters">
+                    <i class="bi bi-x-circle me-1"></i>Clear
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="card table-card">
+    <div class="card-body p-0">
+        @if (isLoading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary"></div>
+                <div class="mt-2 text-muted">Loading students...</div>
+            </div>
+        }
+        else if (students.Count == 0)
+        {
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-people fs-1 d-block mb-2"></i>
+                No students found
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width:40px"><input type="checkbox" @onchange="SelectAll" /></th>
+                            <th>Adm No</th>
+                            <th>Name</th>
+                            <th>Class</th>
+                            <th>Father</th>
+                            <th>Phone</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in students)
+                        {
+                            <tr>
+                                <td><input type="checkbox" checked="@selectedIds.Contains(s.Id)"
+                                           @onchange="e => ToggleSelect(s.Id, (bool)e.Value!)" /></td>
+                                <td><code class="text-primary">@s.AdmissionNumber</code></td>
+                                <td>
+                                    <a href="/students/@s.Id" class="text-decoration-none fw-semibold">
+                                        @s.FullName
+                                    </a>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark">
+                                        @(s.Class?.Name ?? "-") @(s.Section != null ? "- " + s.Section.Name : "")
+                                    </span>
+                                </td>
+                                <td>@(s.FatherName ?? "-")</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(s.FatherPhone))
+                                    {
+                                        <a href="tel:@s.FatherPhone" class="text-decoration-none">@s.FatherPhone</a>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge @GetStatusBadge(s.Status)">@s.Status</span>
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1">
+                                        <a href="/students/@s.Id" class="btn btn-sm btn-outline-primary" title="View">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        @if (AppState.CanManageStudents)
+                                        {
+                                            <a href="/students/@s.Id/edit" class="btn btn-sm btn-outline-secondary" title="Edit">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        }
+                                        @if (!string.IsNullOrEmpty(s.FatherPhone))
+                                        {
+                                            <a href="https://wa.me/91@s.FatherPhone" target="_blank"
+                                               class="btn btn-sm wa-btn" title="WhatsApp">
+                                                <i class="bi bi-whatsapp"></i>
+                                            </a>
+                                        }
+                                        @if (AppState.CanCollectFee)
+                                        {
+                                            <a href="/fees/collect?studentId=@s.Id" class="btn btn-sm btn-outline-success" title="Collect Fee">
+                                                <i class="bi bi-cash-coin"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Bulk Actions + Pagination -->
+            <div class="d-flex align-items-center justify-content-between p-3 border-top">
+                <div class="d-flex align-items-center gap-3">
+                    @if (selectedIds.Count > 0)
+                    {
+                        <span class="text-muted small">@selectedIds.Count selected</span>
+                        <a href="/whatsapp/send?students=@string.Join(",", selectedIds)" class="btn btn-sm wa-btn">
+                            <i class="bi bi-whatsapp me-1"></i>Send WhatsApp (@selectedIds.Count)
+                        </a>
+                    }
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <small class="text-muted">Showing @students.Count of @totalCount</small>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0">
+                            <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                <button class="page-link" @onclick="() => GoToPage(currentPage - 1)">«</button>
+                            </li>
+                            @for (int p = Math.Max(1, currentPage - 2); p <= Math.Min(totalPages, currentPage + 2); p++)
+                            {
+                                var pg = p;
+                                <li class="page-item @(pg == currentPage ? "active" : "")">
+                                    <button class="page-link" @onclick="() => GoToPage(pg)">@pg</button>
+                                </li>
+                            }
+                            <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                <button class="page-link" @onclick="() => GoToPage(currentPage + 1)">»</button>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Student> students = new();
+    private List<Class> classes = new();
+    private List<Section> sections = new();
+    private HashSet<int> selectedIds = new();
+    private bool isLoading = true;
+    private string searchTerm = string.Empty;
+    private int filterClassId = 0;
+    private int filterSectionId = 0;
+    private string filterStatus = string.Empty;
+    private int currentPage = 1;
+    private int totalCount;
+    private int pageSize = 20;
+    private int totalPages => (int)Math.Ceiling((double)totalCount / pageSize);
+    private System.Threading.Timer? debounceTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AppState.CurrentSchoolId > 0)
+        {
+            classes = await ClassService.GetClassesAsync(AppState.CurrentSchoolId);
+            await LoadStudents();
+        }
+    }
+
+    private async Task LoadStudents()
+    {
+        isLoading = true;
+        StateHasChanged();
+        (students, totalCount) = await StudentService.GetPagedAsync(
+            AppState.CurrentSchoolId, searchTerm,
+            filterClassId > 0 ? filterClassId : null,
+            filterSectionId > 0 ? filterSectionId : null,
+            filterStatus, currentPage, pageSize);
+        isLoading = false;
+
+        // Load sections for selected class
+        if (filterClassId > 0)
+            sections = await ClassService.GetSectionsAsync(filterClassId);
+        else
+            sections = classes.SelectMany(c => c.Sections).ToList();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        debounceTimer?.Dispose();
+        debounceTimer = new System.Threading.Timer(async _ =>
+        {
+            currentPage = 1;
+            await InvokeAsync(LoadStudents);
+        }, null, 300, System.Threading.Timeout.Infinite);
+    }
+
+    private async Task GoToPage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        await LoadStudents();
+    }
+
+    private async Task ClearFilters()
+    {
+        searchTerm = string.Empty;
+        filterClassId = 0;
+        filterSectionId = 0;
+        filterStatus = string.Empty;
+        currentPage = 1;
+        await LoadStudents();
+    }
+
+    private void SelectAll(ChangeEventArgs e)
+    {
+        if ((bool)e.Value!)
+            foreach (var s in students) selectedIds.Add(s.Id);
+        else
+            selectedIds.Clear();
+    }
+
+    private void ToggleSelect(int id, bool selected)
+    {
+        if (selected) selectedIds.Add(id);
+        else selectedIds.Remove(id);
+    }
+
+    private static string GetStatusBadge(string status) => status switch
+    {
+        "Active" => "badge-active",
+        "Inactive" => "badge-inactive",
+        "TransferOut" => "badge-pending",
+        _ => "bg-secondary"
+    };
+}

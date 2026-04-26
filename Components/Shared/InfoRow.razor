@@ -1,0 +1,20 @@
+@* Reusable key-value info row *@
+@if (!string.IsNullOrEmpty(Value) && Value != "-")
+{
+    <div class="d-flex justify-content-between py-1 border-bottom">
+        <span class="text-muted small">@Label</span>
+        <span class="small fw-medium text-end">@Value</span>
+    </div>
+}
+else
+{
+    <div class="d-flex justify-content-between py-1 border-bottom">
+        <span class="text-muted small">@Label</span>
+        <span class="small text-muted">-</span>
+    </div>
+}
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string? Value { get; set; }
+}
