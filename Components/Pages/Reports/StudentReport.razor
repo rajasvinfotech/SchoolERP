@@ -1,0 +1,131 @@
+@page "/reports/students"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject StudentService StudentService
+@inject ClassService ClassService
+@inject IJSRuntime JS
+
+<PageTitle>Student Report - School ERP</PageTitle>
+
+<h4 class="fw-bold mb-4"><i class="bi bi-people me-2 text-primary"></i>Student Reports</h4>
+
+<div class="row g-3">
+    <!-- Birthday List -->
+    <div class="col-12 col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+                <i class="bi bi-cake2-fill text-danger"></i>
+                <span class="fw-bold">Birthdays This Month (@DateTime.Today.ToString("MMMM"))</span>
+                <span class="badge bg-danger ms-auto">@birthdays.Count</span>
+            </div>
+            <div class="card-body p-0" style="max-height:300px;overflow-y:auto">
+                @if (birthdays.Count == 0)
+                {
+                    <div class="text-center text-muted py-4">No birthdays this month</div>
+                }
+                else
+                {
+                    @foreach (var s in birthdays)
+                    {
+                        <div class="d-flex align-items-center gap-3 p-3 border-bottom">
+                            <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center"
+                                 style="width:36px;height:36px;font-size:0.8rem;font-weight:700;min-width:36px">
+                                @s.DateOfBirth?.Day
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-medium">@s.FullName</div>
+                                <div class="text-muted small">@(s.Class?.Name ?? "-") &bull; @(s.FatherPhone ?? "")</div>
+                            </div>
+                            @if (!string.IsNullOrEmpty(s.FatherPhone))
+                            {
+                                <a href="https://wa.me/91@s.FatherPhone" target="_blank"
+                                   class="btn btn-sm wa-btn" title="WhatsApp">
+                                    <i class="bi bi-whatsapp"></i>
+                                </a>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Class-wise Count -->
+    <div class="col-12 col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3 border-bottom fw-bold">
+                <i class="bi bi-bar-chart me-2 text-primary"></i>Class-wise Student Count
+            </div>
+            <div class="card-body p-0" style="max-height:300px;overflow-y:auto">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>Class</th><th>Active</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in classWise)
+                        {
+                            <tr>
+                                <td>@c.ClassName</td>
+                                <td><span class="badge bg-primary">@c.Count</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TC Issued -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3 border-bottom fw-bold">
+                <i class="bi bi-file-earmark-check me-2 text-warning"></i>TC Issued Students
+            </div>
+            <div class="card-body p-0">
+                @if (tcStudents.Count == 0)
+                {
+                    <div class="text-center text-muted py-4">No TC issued</div>
+                }
+                else
+                {
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Name</th><th>Adm No</th><th>Class</th><th>TC Date</th><th>Status</th></tr></thead>
+                        <tbody>
+                            @foreach (var s in tcStudents)
+                            {
+                                <tr>
+                                    <td class="fw-medium">@s.FullName</td>
+                                    <td><code>@s.AdmissionNumber</code></td>
+                                    <td>@(s.Class?.Name ?? "-")</td>
+                                    <td>@(s.TcIssuedDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                    <td><span class="badge badge-inactive">@s.Status</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Student> birthdays = new();
+    private List<(string ClassName, int Count)> classWise = new();
+    private List<Student> tcStudents = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        birthdays = await StudentService.GetBirthdaysThisMonthAsync(AppState.CurrentSchoolId);
+
+        var classes = await ClassService.GetClassesAsync(AppState.CurrentSchoolId);
+        var classWideCounts = new List<(string, int)>();
+        foreach (var c in classes)
+        {
+            var count = await StudentService.GetCountAsync(c.SchoolId);
+            classWideCounts.Add((c.Name, count));
+        }
+        classWise = classWideCounts;
+
+        var (tc, _) = await StudentService.GetPagedAsync(AppState.CurrentSchoolId, null, null, null, "TransferOut", 1, 100);
+        tcStudents = tc.Where(s => s.TcIssued).ToList();
+    }
+}

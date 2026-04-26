@@ -1,0 +1,143 @@
+@page "/reports/daily"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject FeeService FeeService
+@inject SchoolService SchoolService
+@inject ExcelService ExcelService
+@inject IJSRuntime JS
+
+<PageTitle>Daily Report - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-calendar-day-fill me-2 text-primary"></i>Daily Collection Report</h4>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Date</label>
+                <input type="date" class="form-control" @bind="reportDate" @bind:after="LoadReport" />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-outline-success" @onclick="ExportExcel">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Export
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+}
+else
+{
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card border-0 bg-success bg-opacity-10 text-center py-3">
+                <div class="text-success fw-bold fs-4">₹@payments.Where(p => p.Status == "Active").Sum(p => p.NetAmount).ToString("N0")</div>
+                <div class="text-muted small">Total Collection</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 bg-primary bg-opacity-10 text-center py-3">
+                <div class="text-primary fw-bold fs-4">@payments.Count(p => p.Status == "Active")</div>
+                <div class="text-muted small">Total Receipts</div>
+            </div>
+        </div>
+        @foreach (var mode in new[] { "Cash", "UPI", "Cheque" })
+        {
+            var amt = payments.Where(p => p.Status == "Active" && p.PaymentMode == mode).Sum(p => p.NetAmount);
+            <div class="col-6 col-md-3">
+                <div class="card border-0 bg-light text-center py-3">
+                    <div class="fw-bold fs-5">₹@amt.ToString("N0")</div>
+                    <div class="text-muted small">@mode</div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="card table-card">
+        <div class="card-header bg-white py-3 fw-bold border-bottom">
+            Transactions on @reportDate.ToString("dd MMMM yyyy")
+        </div>
+        <div class="card-body p-0">
+            @if (payments.Count == 0)
+            {
+                <div class="text-center text-muted py-5">No transactions on this date</div>
+            }
+            else
+            {
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Receipt No</th>
+                            <th>Time</th>
+                            <th>Student</th>
+                            <th>Class</th>
+                            <th>Month</th>
+                            <th>Amount</th>
+                            <th>Mode</th>
+                            <th>Collected By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{int sno = 1;}
+                        @foreach (var p in payments.Where(p => p.Status == "Active"))
+                        {
+                            <tr>
+                                <td class="text-muted small">@(sno++)</td>
+                                <td><code class="text-primary">@p.ReceiptNumber</code></td>
+                                <td class="small text-muted">@p.CreatedAt.ToString("hh:mm tt")</td>
+                                <td class="fw-medium">@p.Student?.FullName</td>
+                                <td><span class="badge bg-light text-dark">@(p.Student?.Class?.Name ?? "-")</span></td>
+                                <td>@p.Month</td>
+                                <td class="fw-bold text-success">₹@p.NetAmount.ToString("N0")</td>
+                                <td><span class="badge bg-secondary">@p.PaymentMode</span></td>
+                                <td class="small text-muted">@(p.CollectedBy ?? "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="6" class="fw-bold text-end">TOTAL</td>
+                            <td class="fw-bold text-success">₹@payments.Where(p=>p.Status=="Active").Sum(p=>p.NetAmount).ToString("N0")</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private DateTime reportDate = DateTime.Today;
+    private List<FeePayment> payments = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadReport();
+
+    private async Task LoadReport()
+    {
+        isLoading = true;
+        StateHasChanged();
+        payments = await FeeService.GetDailyReportAsync(AppState.CurrentSchoolId, reportDate);
+        isLoading = false;
+    }
+
+    private async Task ExportExcel()
+    {
+        var bytes = ExcelService.ExportFeeReport(
+            payments.Where(p => p.Status == "Active").ToList(),
+            $"Daily Report - {reportDate:dd/MM/yyyy}");
+        await JS.InvokeVoidAsync("downloadFile",
+            Convert.ToBase64String(bytes),
+            $"DailyReport_{reportDate:yyyy_MM_dd}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}

@@ -1,0 +1,257 @@
+@page "/users"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject UserService UserService
+@inject SchoolService SchoolService
+@inject AuthService AuthService
+@inject IToastService Toast
+
+<PageTitle>User Management - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-person-gear me-2 text-primary"></i>User Management</h4>
+    <button class="btn btn-primary btn-sm" @onclick="AddUser">
+        <i class="bi bi-person-plus me-1"></i>Add User
+    </button>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-3">
+        <div class="input-group" style="max-width:400px">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input class="form-control" placeholder="Search users..." @bind="searchTerm" @bind:event="oninput" @oninput="OnSearch" />
+        </div>
+    </div>
+</div>
+
+<div class="card table-card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Schools</th>
+                    <th>Last Login</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in users)
+                {
+                    <tr>
+                        <td class="fw-medium">@u.FullName</td>
+                        <td><code>@u.Username</code></td>
+                        <td>
+                            <span class="badge @GetRoleBadge(u.Role)">@u.Role</span>
+                        </td>
+                        <td class="small text-muted">
+                            @(u.Role == "SuperAdmin" ? "All Schools" : string.Join(", ", u.SchoolAccess.Select(a => a.School?.Name ?? "")))
+                        </td>
+                        <td class="small text-muted">@(u.LastLoginAt?.ToString("dd/MM/yy hh:mm") ?? "Never")</td>
+                        <td>
+                            @if (u.IsActive)
+                            {
+                                <span class="badge badge-active">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-inactive">Inactive</span>
+                            }
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => EditUser(u)">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning" @onclick="() => InitResetPassword(u)">
+                                    <i class="bi bi-key"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (editingUser != null)
+{
+    <div class="modal show d-block" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">@(editingUser.Id == 0 ? "Add User" : "Edit User")</h5>
+                    <button class="btn-close btn-close-white" @onclick="() => editingUser = null"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Full Name</label>
+                            <input class="form-control" @bind="editingUser.FullName" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Username</label>
+                            <input class="form-control" @bind="editingUser.Username" />
+                        </div>
+                        @if (editingUser.Id == 0)
+                        {
+                            <div class="col-md-6">
+                                <label class="form-label">Password</label>
+                                <input type="password" class="form-control" @bind="newPassword" />
+                            </div>
+                        }
+                        <div class="col-md-6">
+                            <label class="form-label">Role</label>
+                            <select class="form-select" @bind="editingUser.Role">
+                                <option value="SuperAdmin">Super Admin</option>
+                                <option value="SchoolAdmin">School Admin</option>
+                                <option value="Accountant">Accountant</option>
+                                <option value="Receptionist">Receptionist</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Assign Schools</label>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var school in allSchools)
+                                {
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@selectedSchoolIds.Contains(school.Id)"
+                                               @onchange="e => ToggleSchool(school.Id, (bool)e.Value!)" />
+                                        <label class="form-check-label">@school.Name</label>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-12 d-flex align-items-center gap-2">
+                            <input type="checkbox" class="form-check-input" @bind="editingUser.IsActive" />
+                            <label>Active</label>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(errorMsg))
+                    {
+                        <div class="alert alert-danger mt-3 mb-0">@errorMsg</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => editingUser = null">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveUser">Save User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (resetPasswordUser != null)
+{
+    <div class="modal show d-block" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">Reset Password</h5>
+                    <button class="btn-close" @onclick="() => resetPasswordUser = null"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Reset password for <strong>@resetPasswordUser.Username</strong></p>
+                    <label class="form-label">New Password</label>
+                    <input type="password" class="form-control" @bind="resetNewPassword" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => resetPasswordUser = null">Cancel</button>
+                    <button class="btn btn-warning" @onclick="ConfirmReset">Reset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<User> users = new();
+    private List<School> allSchools = new();
+    private HashSet<int> selectedSchoolIds = new();
+    private User? editingUser;
+    private User? resetPasswordUser;
+    private string newPassword = string.Empty;
+    private string resetNewPassword = string.Empty;
+    private string searchTerm = string.Empty;
+    private string errorMsg = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+        allSchools = await SchoolService.GetAllAsync();
+    }
+
+    private async Task LoadUsers() => users = await UserService.GetAllAsync(searchTerm);
+    private void OnSearch(ChangeEventArgs e) { searchTerm = e.Value?.ToString() ?? string.Empty; _ = LoadUsers(); }
+
+    private void AddUser()
+    {
+        editingUser = new User { IsActive = true, MustChangePassword = true };
+        selectedSchoolIds.Clear();
+        newPassword = string.Empty;
+        errorMsg = string.Empty;
+    }
+
+    private async Task EditUser(User u)
+    {
+        var full = await UserService.GetByIdAsync(u.Id);
+        editingUser = full ?? u;
+        selectedSchoolIds = editingUser.SchoolAccess.Select(a => a.SchoolId).ToHashSet();
+        errorMsg = string.Empty;
+    }
+
+    private async Task SaveUser()
+    {
+        if (editingUser == null) return;
+
+        if (await UserService.UsernameExistsAsync(editingUser.Username, editingUser.Id > 0 ? editingUser.Id : null))
+        {
+            errorMsg = "Username already taken!";
+            return;
+        }
+
+        if (editingUser.Id == 0)
+        {
+            if (string.IsNullOrEmpty(newPassword))
+            {
+                errorMsg = "Password is required.";
+                return;
+            }
+            editingUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            await UserService.CreateAsync(editingUser, selectedSchoolIds.ToList(), AppState.UserId);
+        }
+        else
+        {
+            await UserService.UpdateAsync(editingUser, selectedSchoolIds.ToList(), AppState.UserId);
+        }
+
+        editingUser = null;
+        await LoadUsers();
+        Toast.ShowSuccess("User saved!");
+    }
+
+    private void InitResetPassword(User u) { resetPasswordUser = u; resetNewPassword = string.Empty; }
+
+    private async Task ConfirmReset()
+    {
+        if (resetPasswordUser == null || string.IsNullOrEmpty(resetNewPassword)) return;
+        await AuthService.ResetPasswordAsync(resetPasswordUser.Id, resetNewPassword, AppState.UserId);
+        resetPasswordUser = null;
+        Toast.ShowSuccess("Password reset. User must change on next login.");
+    }
+
+    private void ToggleSchool(int id, bool sel) { if (sel) selectedSchoolIds.Add(id); else selectedSchoolIds.Remove(id); }
+
+    private static string GetRoleBadge(string role) => role switch
+    {
+        "SuperAdmin" => "bg-danger",
+        "SchoolAdmin" => "bg-primary",
+        "Accountant" => "bg-success",
+        _ => "bg-secondary"
+    };
+}

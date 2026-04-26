@@ -1,0 +1,148 @@
+@inject AppState AppState
+@inject NavigationManager Nav
+
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-mortarboard-fill text-primary fs-4"></i>
+            <div>
+                <h5 class="mb-0">School ERP</h5>
+                <small>@AppState.CurrentSchoolName</small>
+            </div>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+            <i class="bi bi-house-door-fill"></i> Dashboard
+        </NavLink>
+
+        @if (AppState.IsSuperAdmin || AppState.Role == "SchoolAdmin")
+        {
+            <div class="nav-section-title">Management</div>
+
+            <NavLink class="nav-link" href="/schools">
+                <i class="bi bi-building"></i> Schools
+            </NavLink>
+
+            <NavLink class="nav-link" href="/classes">
+                <i class="bi bi-grid-3x3-gap-fill"></i> Classes & Sections
+            </NavLink>
+        }
+
+        <div class="nav-section-title">Students</div>
+
+        <NavLink class="nav-link" href="/students">
+            <i class="bi bi-people-fill"></i> Student List
+        </NavLink>
+
+        @if (AppState.CanManageStudents)
+        {
+            <NavLink class="nav-link" href="/students/add">
+                <i class="bi bi-person-plus-fill"></i> Add Student
+            </NavLink>
+
+            <NavLink class="nav-link" href="/students/import">
+                <i class="bi bi-upload"></i> Import Students
+            </NavLink>
+        }
+
+        <div class="nav-section-title">Fee Management</div>
+
+        @if (AppState.CanCollectFee)
+        {
+            <NavLink class="nav-link" href="/fees/collect">
+                <i class="bi bi-cash-coin"></i> Collect Fee
+            </NavLink>
+        }
+
+        @if (AppState.IsSchoolAdmin)
+        {
+            <NavLink class="nav-link" href="/fees/structure">
+                <i class="bi bi-list-columns-reverse"></i> Fee Structure
+            </NavLink>
+        }
+
+        <NavLink class="nav-link" href="/fees/due">
+            <i class="bi bi-exclamation-triangle-fill text-warning"></i> Due List
+        </NavLink>
+
+        @if (AppState.CanAccessReports)
+        {
+            <NavLink class="nav-link" href="/fees/history">
+                <i class="bi bi-clock-history"></i> Fee History
+            </NavLink>
+        }
+
+        <div class="nav-section-title">Communication</div>
+
+        <NavLink class="nav-link" href="/whatsapp/send">
+            <i class="bi bi-whatsapp" style="color:#25d366"></i> Send Message
+        </NavLink>
+
+        <NavLink class="nav-link" href="/whatsapp/templates">
+            <i class="bi bi-file-text-fill"></i> Templates
+        </NavLink>
+
+        <NavLink class="nav-link" href="/whatsapp/history">
+            <i class="bi bi-chat-dots-fill"></i> Message History
+        </NavLink>
+
+        @if (AppState.CanAccessReports)
+        {
+            <div class="nav-section-title">Reports</div>
+
+            <NavLink class="nav-link" href="/reports/daily">
+                <i class="bi bi-calendar-day-fill"></i> Daily Report
+            </NavLink>
+
+            <NavLink class="nav-link" href="/reports/monthly">
+                <i class="bi bi-calendar-month-fill"></i> Monthly Report
+            </NavLink>
+
+            <NavLink class="nav-link" href="/reports/due">
+                <i class="bi bi-graph-down-arrow"></i> Due Report
+            </NavLink>
+
+            <NavLink class="nav-link" href="/reports/students">
+                <i class="bi bi-people"></i> Student Report
+            </NavLink>
+        }
+
+        @if (AppState.CanAccessSettings)
+        {
+            <div class="nav-section-title">System</div>
+
+            @if (AppState.CanManageUsers)
+            {
+                <NavLink class="nav-link" href="/users">
+                    <i class="bi bi-person-gear"></i> User Management
+                </NavLink>
+            }
+
+            <NavLink class="nav-link" href="/settings/backup">
+                <i class="bi bi-hdd-fill"></i> Backup Manager
+            </NavLink>
+
+            <NavLink class="nav-link" href="/settings/export">
+                <i class="bi bi-box-arrow-up"></i> Export Data
+            </NavLink>
+
+            <NavLink class="nav-link" href="/settings/import">
+                <i class="bi bi-box-arrow-in-down"></i> Import Data
+            </NavLink>
+
+            <NavLink class="nav-link" href="/settings">
+                <i class="bi bi-gear-fill"></i> Settings
+            </NavLink>
+
+            <NavLink class="nav-link" href="/settings/audit">
+                <i class="bi bi-journal-text"></i> Audit Log
+            </NavLink>
+        }
+    </nav>
+
+    <div class="p-3 border-top border-secondary">
+        <small class="text-muted">v1.0 &copy; 2025 School ERP</small>
+    </div>
+</div>

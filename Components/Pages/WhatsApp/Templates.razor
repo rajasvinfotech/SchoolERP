@@ -1,0 +1,113 @@
+@page "/whatsapp/templates"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject WhatsAppService WhatsAppService
+@inject IToastService Toast
+
+<PageTitle>Message Templates - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-file-text-fill me-2 text-primary"></i>Message Templates</h4>
+    <button class="btn btn-primary btn-sm" @onclick="AddTemplate">
+        <i class="bi bi-plus-circle me-1"></i>Add Template
+    </button>
+</div>
+
+<div class="row g-3">
+    @foreach (var t in templates)
+    {
+        <div class="col-12 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white d-flex align-items-center justify-content-between py-2 border-bottom">
+                    <div>
+                        <span class="fw-bold">@t.Name</span>
+                        <span class="badge bg-primary ms-2 small">@t.Category</span>
+                        @if (t.IsDefault) { <span class="badge bg-success ms-1 small">Default</span> }
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => EditTemplate(t)">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <a href="/whatsapp/send" class="btn btn-sm wa-btn" title="Use">
+                            <i class="bi bi-send"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3 rounded small" style="white-space:pre-wrap;font-family:inherit">@t.Body</pre>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (editingTemplate != null)
+{
+    <div class="modal show d-block" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">@(editingTemplate.Id == 0 ? "Add Template" : "Edit Template")</h5>
+                    <button class="btn-close btn-close-white" @onclick="() => editingTemplate = null"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Template Name</label>
+                            <input class="form-control" @bind="editingTemplate.Name" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Category</label>
+                            <select class="form-select" @bind="editingTemplate.Category">
+                                <option value="General">General</option>
+                                <option value="FeeDue">Fee Due</option>
+                                <option value="FeeReceipt">Fee Receipt</option>
+                                <option value="Holiday">Holiday</option>
+                                <option value="Exam">Exam</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Message Body</label>
+                            <textarea class="form-control" rows="8" @bind="editingTemplate.Body"></textarea>
+                            <div class="form-text">
+                                Available: {student_name}, {father_name}, {amount}, {month}, {school_name}, {date}, {receipt_no}, {reason}, {message}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => editingTemplate = null">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveTemplate">Save Template</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MessageTemplate> templates = new();
+    private MessageTemplate? editingTemplate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await WhatsAppService.SeedDefaultTemplatesAsync(AppState.CurrentSchoolId);
+        templates = await WhatsAppService.GetTemplatesAsync(AppState.CurrentSchoolId);
+    }
+
+    private void AddTemplate() => editingTemplate = new MessageTemplate { SchoolId = AppState.CurrentSchoolId };
+    private void EditTemplate(MessageTemplate t) => editingTemplate = new MessageTemplate
+    {
+        Id = t.Id, SchoolId = t.SchoolId, Name = t.Name, Body = t.Body,
+        Category = t.Category, IsActive = t.IsActive, IsDefault = t.IsDefault
+    };
+
+    private async Task SaveTemplate()
+    {
+        if (editingTemplate == null) return;
+        editingTemplate.SchoolId = AppState.CurrentSchoolId;
+        await WhatsAppService.SaveTemplateAsync(editingTemplate);
+        templates = await WhatsAppService.GetTemplatesAsync(AppState.CurrentSchoolId);
+        editingTemplate = null;
+        Toast.ShowSuccess("Template saved!");
+    }
+}

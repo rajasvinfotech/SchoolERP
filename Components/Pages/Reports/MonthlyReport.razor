@@ -1,0 +1,134 @@
+@page "/reports/monthly"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject FeeService FeeService
+@inject ExcelService ExcelService
+@inject IJSRuntime JS
+
+<PageTitle>Monthly Report - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-calendar-month-fill me-2 text-primary"></i>Monthly Collection Report</h4>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Month</label>
+                <input type="month" class="form-control" @bind="reportMonth" @bind:after="LoadReport" />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-outline-success" @onclick="ExportExcel">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Export
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card border-0 bg-success bg-opacity-10 text-center py-3">
+                <div class="text-success fw-bold fs-4">₹@payments.Where(p=>p.Status=="Active").Sum(p=>p.NetAmount).ToString("N0")</div>
+                <div class="text-muted small">Total Collection</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 bg-primary bg-opacity-10 text-center py-3">
+                <div class="text-primary fw-bold fs-4">@payments.Count(p=>p.Status=="Active")</div>
+                <div class="text-muted small">Total Receipts</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        <div class="card-header bg-white py-3 fw-bold border-bottom">
+            Transactions for @selectedDate.ToString("MMMM yyyy")
+        </div>
+        <div class="card-body p-0">
+            @if (payments.Count == 0)
+            {
+                <div class="text-center text-muted py-5">No transactions this month</div>
+            }
+            else
+            {
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Receipt No</th>
+                            <th>Date</th>
+                            <th>Student</th>
+                            <th>Class</th>
+                            <th>Fee Month</th>
+                            <th>Amount</th>
+                            <th>Mode</th>
+                            <th>Print</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in payments.Where(p => p.Status == "Active"))
+                        {
+                            <tr>
+                                <td><code class="text-primary">@p.ReceiptNumber</code></td>
+                                <td class="small">@p.PaymentDate.ToString("dd/MM/yyyy")</td>
+                                <td class="fw-medium">@p.Student?.FullName</td>
+                                <td><span class="badge bg-light text-dark">@(p.Student?.Class?.Name ?? "-")</span></td>
+                                <td>@p.Month</td>
+                                <td class="fw-bold text-success">₹@p.NetAmount.ToString("N0")</td>
+                                <td><span class="badge bg-secondary">@p.PaymentMode</span></td>
+                                <td>
+                                    <a href="/api/receipt/@p.Id" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-printer"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="5" class="fw-bold text-end">TOTAL</td>
+                            <td class="fw-bold text-success">₹@payments.Where(p=>p.Status=="Active").Sum(p=>p.NetAmount).ToString("N0")</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string reportMonth = DateTime.Today.ToString("yyyy-MM");
+    private DateTime selectedDate = DateTime.Today;
+    private List<FeePayment> payments = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadReport();
+
+    private async Task LoadReport()
+    {
+        isLoading = true;
+        StateHasChanged();
+        if (DateTime.TryParse(reportMonth + "-01", out selectedDate))
+            payments = await FeeService.GetMonthlyReportAsync(AppState.CurrentSchoolId, selectedDate.Year, selectedDate.Month);
+        isLoading = false;
+    }
+
+    private async Task ExportExcel()
+    {
+        var bytes = ExcelService.ExportFeeReport(
+            payments.Where(p => p.Status == "Active").ToList(),
+            $"Monthly Report - {selectedDate:MMMM yyyy}");
+        await JS.InvokeVoidAsync("downloadFile",
+            Convert.ToBase64String(bytes),
+            $"MonthlyReport_{selectedDate:yyyy_MM}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}

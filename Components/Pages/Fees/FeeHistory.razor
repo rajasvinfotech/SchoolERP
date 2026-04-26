@@ -1,0 +1,217 @@
+@page "/fees/history"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject FeeService FeeService
+@inject StudentService StudentService
+@inject IToastService Toast
+
+<PageTitle>Fee History - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Fee History</h4>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-3">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" placeholder="Search student name or receipt..."
+                           @bind="searchTerm" @bind:event="oninput" @oninput="OnSearch" />
+                </div>
+            </div>
+            <div class="col-md-3">
+                <input type="date" class="form-control" @bind="dateFrom" @bind:after="LoadHistory"
+                       title="From Date" />
+            </div>
+            <div class="col-md-3">
+                <input type="date" class="form-control" @bind="dateTo" @bind:after="LoadHistory"
+                       title="To Date" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card table-card">
+    <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between">
+        <span class="fw-bold">All Payments</span>
+        <span class="badge bg-success fs-6">Total: ₹@payments.Where(p => p.Status == "Active").Sum(p => p.NetAmount).ToString("N0")</span>
+    </div>
+    <div class="card-body p-0">
+        @if (isLoading)
+        {
+            <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+        }
+        else if (payments.Count == 0)
+        {
+            <div class="text-center text-muted py-5">No payment records found</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Receipt No</th>
+                            <th>Date</th>
+                            <th>Student</th>
+                            <th>Class</th>
+                            <th>Month</th>
+                            <th>Amount</th>
+                            <th>Mode</th>
+                            <th>Collected By</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in payments)
+                        {
+                            <tr class="@(p.Status == "Cancelled" ? "text-muted" : "")">
+                                <td><code class="@(p.Status == "Active" ? "text-primary" : "text-muted")">@p.ReceiptNumber</code></td>
+                                <td class="small">@p.PaymentDate.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    <a href="/students/@p.StudentId" class="text-decoration-none">
+                                        @p.Student?.FullName
+                                    </a>
+                                </td>
+                                <td><span class="badge bg-light text-dark">@(p.Student?.Class?.Name ?? "-")</span></td>
+                                <td>@p.Month</td>
+                                <td class="fw-bold @(p.Status == "Active" ? "text-success" : "text-muted")">
+                                    ₹@p.NetAmount.ToString("N0")
+                                </td>
+                                <td><span class="badge bg-secondary small">@p.PaymentMode</span></td>
+                                <td class="small text-muted">@(p.CollectedBy ?? "-")</td>
+                                <td>
+                                    @if (p.Status == "Cancelled")
+                                    {
+                                        <span class="badge badge-cancelled" title="@p.CancelReason">Cancelled</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-paid">Active</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1">
+                                        @if (p.Status == "Active")
+                                        {
+                                            <a href="/api/receipt/@p.Id" target="_blank"
+                                               class="btn btn-sm btn-outline-primary" title="Print">
+                                                <i class="bi bi-printer"></i>
+                                            </a>
+                                            @if (AppState.IsSchoolAdmin)
+                                            {
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        @onclick="() => InitCancel(p)" title="Cancel">
+                                                    <i class="bi bi-x-circle"></i>
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@if (cancelPayment != null)
+{
+    <div class="modal show d-block" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Cancel Receipt</h5>
+                    <button class="btn-close btn-close-white" @onclick="() => cancelPayment = null"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Cancel receipt <strong>@cancelPayment.ReceiptNumber</strong> of ₹@cancelPayment.NetAmount.ToString("N0")?</p>
+                    <div>
+                        <label class="form-label">Reason *</label>
+                        <input class="form-control" @bind="cancelReason" placeholder="Enter reason for cancellation" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => cancelPayment = null">No, Keep</button>
+                    <button class="btn btn-danger" @onclick="ConfirmCancel"
+                            disabled="@string.IsNullOrEmpty(cancelReason)">
+                        Yes, Cancel Receipt
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<FeePayment> payments = new();
+    private bool isLoading = true;
+    private string searchTerm = string.Empty;
+    private DateTime? dateFrom;
+    private DateTime? dateTo;
+    private FeePayment? cancelPayment;
+    private string cancelReason = string.Empty;
+    private System.Threading.Timer? debounceTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        dateFrom = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        dateTo = DateTime.Today;
+        await LoadHistory();
+    }
+
+    private async Task LoadHistory()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        if (dateFrom.HasValue && dateTo.HasValue)
+        {
+            var allPayments = await FeeService.GetMonthlyReportAsync(
+                AppState.CurrentSchoolId, DateTime.Today.Year, DateTime.Today.Month);
+
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                var s = searchTerm.ToLower();
+                payments = allPayments.Where(p =>
+                    (p.Student?.FullName.ToLower().Contains(s) ?? false) ||
+                    p.ReceiptNumber.ToLower().Contains(s)).ToList();
+            }
+            else
+                payments = allPayments;
+        }
+
+        isLoading = false;
+    }
+
+    private void OnSearch(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        debounceTimer?.Dispose();
+        debounceTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(LoadHistory);
+        }, null, 300, System.Threading.Timeout.Infinite);
+    }
+
+    private void InitCancel(FeePayment p)
+    {
+        cancelPayment = p;
+        cancelReason = string.Empty;
+    }
+
+    private async Task ConfirmCancel()
+    {
+        if (cancelPayment == null || string.IsNullOrEmpty(cancelReason)) return;
+
+        await FeeService.CancelReceiptAsync(cancelPayment.Id, cancelReason, AppState.UserId, AppState.Username);
+        cancelPayment = null;
+        Toast.ShowWarning("Receipt cancelled.");
+        await LoadHistory();
+    }
+}

@@ -1,0 +1,150 @@
+@page "/fees/due"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject FeeService FeeService
+@inject ClassService ClassService
+@inject NavigationManager Nav
+
+<PageTitle>Fee Due List - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-exclamation-triangle-fill me-2 text-warning"></i>Fee Due List</h4>
+    <div class="d-flex gap-2">
+        @if (selectedIds.Count > 0)
+        {
+            <a href="/whatsapp/send?students=@string.Join(",", selectedIds)" class="btn btn-sm wa-btn">
+                <i class="bi bi-whatsapp me-1"></i>Send Reminder (@selectedIds.Count)
+            </a>
+        }
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-3">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <select class="form-select" @bind="filterClassId" @bind:after="LoadDue">
+                    <option value="0">All Classes</option>
+                    @foreach (var c in classes)
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <input type="month" class="form-control" @bind="filterMonth" @bind:after="LoadDue" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card table-card">
+    <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between">
+        <span class="fw-bold">Students with Due Fees</span>
+        <span class="badge bg-danger">@dueStudents.Count students</span>
+    </div>
+    <div class="card-body p-0">
+        @if (isLoading)
+        {
+            <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+        }
+        else if (dueStudents.Count == 0)
+        {
+            <div class="text-center py-5 text-success">
+                <i class="bi bi-check-circle-fill fs-1 d-block mb-2"></i>
+                All fees are paid for this period!
+            </div>
+        }
+        else
+        {
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" @onchange="SelectAll" /></th>
+                        <th>Adm No</th>
+                        <th>Student</th>
+                        <th>Class</th>
+                        <th>Father</th>
+                        <th>Phone</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in dueStudents)
+                    {
+                        <tr>
+                            <td><input type="checkbox" checked="@selectedIds.Contains(s.Id)"
+                                       @onchange="e => ToggleSelect(s.Id, (bool)e.Value!)" /></td>
+                            <td><code class="text-warning">@s.AdmissionNumber</code></td>
+                            <td class="fw-semibold">@s.FullName</td>
+                            <td><span class="badge bg-light text-dark">@(s.Class?.Name ?? "-")</span></td>
+                            <td>@(s.FatherName ?? "-")</td>
+                            <td>@(s.FatherPhone ?? "-")</td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    @if (AppState.CanCollectFee)
+                                    {
+                                        <a href="/fees/collect?studentId=@s.Id" class="btn btn-sm btn-primary" title="Collect Fee">
+                                            <i class="bi bi-cash-coin"></i>
+                                        </a>
+                                    }
+                                    @if (!string.IsNullOrEmpty(s.FatherPhone))
+                                    {
+                                        <a href="https://wa.me/91@s.FatherPhone" target="_blank"
+                                           class="btn btn-sm wa-btn" title="WhatsApp">
+                                            <i class="bi bi-whatsapp"></i>
+                                        </a>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Student> dueStudents = new();
+    private List<Class> classes = new();
+    private HashSet<int> selectedIds = new();
+    private int filterClassId;
+    private string filterMonth = DateTime.Today.ToString("yyyy-MM");
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        classes = await ClassService.GetClassesAsync(AppState.CurrentSchoolId);
+        await LoadDue();
+    }
+
+    private async Task LoadDue()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        string? month = null;
+        if (DateTime.TryParse(filterMonth + "-01", out var dt))
+            month = dt.ToString("MMM yyyy");
+
+        dueStudents = await FeeService.GetStudentsWithDueAsync(
+            AppState.CurrentSchoolId,
+            filterClassId > 0 ? filterClassId : null,
+            month);
+
+        isLoading = false;
+    }
+
+    private void SelectAll(ChangeEventArgs e)
+    {
+        if ((bool)e.Value!) foreach (var s in dueStudents) selectedIds.Add(s.Id);
+        else selectedIds.Clear();
+    }
+
+    private void ToggleSelect(int id, bool sel)
+    {
+        if (sel) selectedIds.Add(id);
+        else selectedIds.Remove(id);
+    }
+}

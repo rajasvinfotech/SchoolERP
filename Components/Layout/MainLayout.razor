@@ -1,0 +1,28 @@
+﻿@inherits LayoutComponentBase
+@inject AppState AppState
+@inject NavigationManager Nav
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+
+@if (!AppState.IsAuthenticated)
+{
+    Nav.NavigateTo("/login", forceLoad: false);
+}
+else
+{
+    <Sidebar />
+    <div class="main-content">
+        <TopNavbar />
+        <div class="page-content">
+            <BlazoredToasts Position="Blazored.Toast.Configuration.ToastPosition.TopRight"
+                            Timeout="4"
+                            ShowProgressBar="true" />
+            @Body
+        </div>
+    </div>
+}
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

@@ -1,0 +1,189 @@
+@page "/schools"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject SchoolService SchoolService
+@inject IToastService Toast
+
+<PageTitle>Schools - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-building me-2 text-primary"></i>Schools / Institutes</h4>
+    @if (AppState.IsSuperAdmin)
+    {
+        <button class="btn btn-primary btn-sm" @onclick="AddSchool">
+            <i class="bi bi-plus-circle me-1"></i>Add School
+        </button>
+    }
+</div>
+
+<div class="row g-3">
+    @foreach (var s in schools)
+    {
+        <div class="col-12 col-md-6 col-xl-4">
+            <div class="card border-0 shadow-sm h-100 @(!s.IsActive ? "opacity-50" : "")">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="bg-primary bg-opacity-10 rounded-3 p-3">
+                            <i class="bi bi-building text-primary fs-3"></i>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <span class="badge @(s.Type == "School" ? "bg-primary" : s.Type == "Coaching" ? "bg-warning text-dark" : "bg-info")">
+                                @s.Type
+                            </span>
+                        </div>
+                    </div>
+                    <h5 class="fw-bold mb-1">@s.Name</h5>
+                    <div class="text-muted small mb-2">
+                        @if (!string.IsNullOrEmpty(s.Board))
+                        { <span class="badge bg-light text-dark me-1">@s.Board</span> }
+                        @(s.AcademicYear ?? "")
+                    </div>
+                    <div class="text-muted small">
+                        @if (!string.IsNullOrEmpty(s.Phone)) { <div><i class="bi bi-telephone me-1"></i>@s.Phone</div> }
+                        @if (!string.IsNullOrEmpty(s.City)) { <div><i class="bi bi-geo-alt me-1"></i>@s.City</div> }
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-top d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-primary flex-fill" @onclick="() => EditSchool(s)">
+                        <i class="bi bi-pencil me-1"></i>Edit
+                    </button>
+                    <button class="btn btn-sm btn-outline-success flex-fill"
+                            @onclick="() => { AppState.CurrentSchoolId = s.Id; AppState.CurrentSchoolName = s.Name; AppState.NotifyStateChanged(); }">
+                        <i class="bi bi-arrow-right-circle me-1"></i>Switch
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (editingSchool != null)
+{
+    <div class="modal show d-block" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">@(editingSchool.Id == 0 ? "Add School" : "Edit School")</h5>
+                    <button class="btn-close btn-close-white" @onclick="() => editingSchool = null"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">School Name *</label>
+                            <input class="form-control" @bind="editingSchool.Name" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Type</label>
+                            <select class="form-select" @bind="editingSchool.Type">
+                                <option value="School">School</option>
+                                <option value="Coaching">Coaching</option>
+                                <option value="Both">Both</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Board</label>
+                            <select class="form-select" @bind="editingSchool.Board">
+                                <option value="">Select</option>
+                                <option value="CBSE">CBSE</option>
+                                <option value="ICSE">ICSE</option>
+                                <option value="UP Board">UP Board</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Academic Year</label>
+                            <input class="form-control" @bind="editingSchool.AcademicYear" placeholder="2024-25" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Principal Name</label>
+                            <input class="form-control" @bind="editingSchool.PrincipalName" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Address</label>
+                            <input class="form-control" @bind="editingSchool.Address" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">City</label>
+                            <input class="form-control" @bind="editingSchool.City" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">State</label>
+                            <input class="form-control" @bind="editingSchool.State" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Pincode</label>
+                            <input class="form-control" @bind="editingSchool.Pincode" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone</label>
+                            <input class="form-control" @bind="editingSchool.Phone" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <input class="form-control" @bind="editingSchool.Email" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Receipt Prefix</label>
+                            <input class="form-control" @bind="editingSchool.ReceiptPrefix" placeholder="RCP" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Admission Prefix</label>
+                            <input class="form-control" @bind="editingSchool.AdmissionPrefix" placeholder="ADM" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Affiliation Number</label>
+                            <input class="form-control" @bind="editingSchool.AffiliationNumber" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Color Theme</label>
+                            <input type="color" class="form-control" @bind="editingSchool.ColorTheme" style="height:42px" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
+                            <input type="checkbox" class="form-check-input" @bind="editingSchool.IsActive" />
+                            <label>Active</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => editingSchool = null">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveSchool">Save School</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<School> schools = new();
+    private School? editingSchool;
+
+    protected override async Task OnInitializedAsync()
+    {
+        schools = await SchoolService.GetByUserAsync(AppState.UserId, AppState.Role);
+    }
+
+    private void AddSchool() => editingSchool = new School { IsActive = true, Type = "School" };
+    private void EditSchool(School s) => editingSchool = new School
+    {
+        Id = s.Id, Name = s.Name, Type = s.Type, Address = s.Address, City = s.City,
+        State = s.State, Pincode = s.Pincode, Phone = s.Phone, Email = s.Email,
+        PrincipalName = s.PrincipalName, Board = s.Board, AcademicYear = s.AcademicYear,
+        AffiliationNumber = s.AffiliationNumber, ColorTheme = s.ColorTheme,
+        ReceiptPrefix = s.ReceiptPrefix, AdmissionPrefix = s.AdmissionPrefix,
+        LastReceiptNumber = s.LastReceiptNumber, LastAdmissionNumber = s.LastAdmissionNumber,
+        IsActive = s.IsActive
+    };
+
+    private async Task SaveSchool()
+    {
+        if (editingSchool == null || string.IsNullOrEmpty(editingSchool.Name)) return;
+        if (editingSchool.Id == 0)
+            await SchoolService.CreateAsync(editingSchool);
+        else
+            await SchoolService.UpdateAsync(editingSchool);
+
+        schools = await SchoolService.GetByUserAsync(AppState.UserId, AppState.Role);
+        editingSchool = null;
+        Toast.ShowSuccess("School saved!");
+    }
+}

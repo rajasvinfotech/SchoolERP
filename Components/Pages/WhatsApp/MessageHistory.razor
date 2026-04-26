@@ -1,0 +1,56 @@
+@page "/whatsapp/history"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject WhatsAppService WhatsAppService
+
+<PageTitle>Message History - School ERP</PageTitle>
+
+<h4 class="fw-bold mb-4"><i class="bi bi-chat-dots-fill me-2 text-primary"></i>Message History</h4>
+
+<div class="card table-card">
+    <div class="card-body p-0">
+        @if (logs.Count == 0)
+        {
+            <div class="text-center text-muted py-5">No messages sent yet</div>
+        }
+        else
+        {
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Template</th>
+                        <th>Recipients</th>
+                        <th>Sent</th>
+                        <th>Failed</th>
+                        <th>Method</th>
+                        <th>Sent By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in logs)
+                    {
+                        <tr>
+                            <td class="small">@l.SentAt.ToString("dd/MM/yyyy hh:mm tt")</td>
+                            <td class="fw-medium">@l.TemplateName</td>
+                            <td>@l.TotalRecipients</td>
+                            <td class="text-success fw-semibold">@l.SuccessCount</td>
+                            <td class="text-danger">@l.FailedCount</td>
+                            <td><span class="badge bg-light text-dark">@l.Method</span></td>
+                            <td class="small text-muted">@l.SentBy</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private List<MessageLog> logs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        logs = await WhatsAppService.GetLogsAsync(AppState.CurrentSchoolId);
+    }
+}

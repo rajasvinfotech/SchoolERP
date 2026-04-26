@@ -1,0 +1,154 @@
+@page "/classes"
+@rendermode InteractiveServer
+@inject AppState AppState
+@inject ClassService ClassService
+@inject IToastService Toast
+
+<PageTitle>Classes & Sections - School ERP</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-grid-3x3-gap-fill me-2 text-primary"></i>Classes & Sections</h4>
+    <button class="btn btn-primary btn-sm" @onclick="AddClass">
+        <i class="bi bi-plus-circle me-1"></i>Add Class
+    </button>
+</div>
+
+<div class="row g-3">
+    @foreach (var c in classes)
+    {
+        <div class="col-12 col-md-6 col-xl-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex align-items-center justify-content-between py-2 border-bottom">
+                    <div class="fw-bold">@c.Name</div>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => EditClass(c)">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-success" @onclick="() => AddSection(c.Id)">
+                            <i class="bi bi-plus"></i> Section
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body py-2">
+                    @if (c.Sections.Count == 0)
+                    {
+                        <span class="text-muted small">No sections</span>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var s in c.Sections.Where(s => s.IsActive))
+                            {
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="badge bg-primary py-1 px-2">Section @s.Name</span>
+                                    <button class="btn btn-sm p-0 text-danger" style="line-height:1"
+                                            @onclick="() => DeleteSection(s.Id)">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (editingClass != null)
+{
+    <div class="modal show d-block" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">@(editingClass.Id == 0 ? "Add Class" : "Edit Class")</h5>
+                    <button class="btn-close btn-close-white" @onclick="() => editingClass = null"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Class Name</label>
+                        <input class="form-control" @bind="editingClass.Name" placeholder="e.g., Class 1, Nursery, Morning Batch" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sort Order</label>
+                        <input type="number" class="form-control" @bind="editingClass.SortOrder" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Class Teacher</label>
+                        <input class="form-control" @bind="editingClass.ClassTeacher" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => editingClass = null">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveClass">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (addingSectionForClassId > 0)
+{
+    <div class="modal show d-block" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Add Section</h5>
+                    <button class="btn-close btn-close-white" @onclick="() => addingSectionForClassId = 0"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Section Name</label>
+                        <input class="form-control" @bind="newSectionName" placeholder="e.g., A, B, C" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => addingSectionForClassId = 0">Cancel</button>
+                    <button class="btn btn-success" @onclick="SaveSection">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Class> classes = new();
+    private Class? editingClass;
+    private int addingSectionForClassId;
+    private string newSectionName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        classes = await ClassService.GetClassesAsync(AppState.CurrentSchoolId);
+    }
+
+    private void AddClass() => editingClass = new Class { SchoolId = AppState.CurrentSchoolId, IsActive = true };
+    private void EditClass(Class c) => editingClass = new Class { Id = c.Id, SchoolId = c.SchoolId, Name = c.Name, SortOrder = c.SortOrder, ClassTeacher = c.ClassTeacher, IsActive = c.IsActive };
+
+    private async Task SaveClass()
+    {
+        if (editingClass == null || string.IsNullOrEmpty(editingClass.Name)) return;
+        editingClass.SchoolId = AppState.CurrentSchoolId;
+        await ClassService.SaveClassAsync(editingClass);
+        classes = await ClassService.GetClassesAsync(AppState.CurrentSchoolId);
+        editingClass = null;
+        Toast.ShowSuccess("Class saved!");
+    }
+
+    private void AddSection(int classId) { addingSectionForClassId = classId; newSectionName = string.Empty; }
+
+    private async Task SaveSection()
+    {
+        if (string.IsNullOrEmpty(newSectionName)) return;
+        await ClassService.SaveSectionAsync(new Section { ClassId = addingSectionForClassId, Name = newSectionName, IsActive = true });
+        classes = await ClassService.GetClassesAsync(AppState.CurrentSchoolId);
+        addingSectionForClassId = 0;
+        Toast.ShowSuccess("Section added!");
+    }
+
+    private async Task DeleteSection(int id)
+    {
+        await ClassService.DeleteSectionAsync(id);
+        classes = await ClassService.GetClassesAsync(AppState.CurrentSchoolId);
+    }
+}
